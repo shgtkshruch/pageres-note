@@ -1,0 +1,23 @@
+{
+  "name": "pageres-note",
+  "version": "0.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shgtkshruch/pageres-note.git"
+  },
+  "author": "shgtkshruch <shgtkshruch@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/shgtkshruch/pageres-note/issues"
+  },
+  "homepage": "https://github.com/shgtkshruch/pageres-note",
+  "dependencies": {
+    "node-note": "^0.1.1",
+    "pageres": "^1.0.1"
+  }
+}
