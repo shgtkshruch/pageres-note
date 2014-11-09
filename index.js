@@ -1,8 +1,8 @@
 process.env.NODE_ENV = 'production';
 
 var fs = require('fs');
-var Pageres = require('pageres');
 var nodeNote = require('node-note');
+var Pageres = require('pageres');
 var _ = require('lodash');
 var async = require('async');
 var cheerio = require('cheerio');
@@ -17,52 +17,69 @@ var sizes = {
   'laptop': '1366x768',
   'desktop': '1920x1080'
 };
-
 var dir = __dirname + '/images';
+var keyword = 'web_design_evernote';
+var notebookName = '1511 Responsive';
 
-function getUrl (callback) {
-  evernote.getNoteMetadata({word: 'web_design_evernote'}, function (noteMetadataList) {
-    var guid = noteMetadataList[0].guid;
-    evernote.getNote({guid: guid, withContent: true}, function (note) {
-      var $ = cheerio.load(note.content);
-      var url = $('a').attr('shape', 'rect').first().text();
-      var title = $('b').first().text();
-      callback(url, title);
+/**
+ * Get note ooject from Evernote
+ *
+ * @param {String} search evernote by this
+ * @param {Number} max number of return note
+ * @param {Function} callback
+ */
+
+function getNotes (keyword, maxNotes, cb) {
+  var notes = [];
+  evernote.getNoteMetadata({word: keyword, maxNotes: maxNotes}, function (noteMetadataList) {
+    async.each(noteMetadataList, function (metadata, done) {
+      var note = {};
+      note.guid = metadata.guid;
+      evernote.getNote({guid: note.guid, withContent: true}, function (_note) {
+        var $ = cheerio.load(_note.content);
+        note.url = $('a').attr('shape', 'rect').first().text();
+        note.title = $('b').first().text();
+        notes.push(note);
+        done();
+      });
+    }, function (err) {
+      if (err) {
+        throw err;
+      }
+      cb(notes);
     });
   });
 }
 
-function getPage (url, callback) {
-  var pageres = new Pageres({delay: 2, crop: true})
-    .src(url, _.values(sizes))
+/**
+ * Get responsive screenshot using pageres
+ *
+ * @param {Object} it must have `title`, `url`, `guid`
+ * @param {Object} device kind and it's screen size
+ * @param {Function} callback
+ */
+
+function getScreenshot (note, sizes, done) {
+  var pageres = new Pageres({delay: 2})
+    .src(note.url, _.values(sizes))
     .dest(dir);
 
   pageres.run(function (err) {
     if (err) {
       throw err;
     }
-    callback();
+    file(note, done);
   });
 }
 
-function createNote (_title, fp, url, tag, width, done) {
-  var title = _title + ' (' + tag + ')';
-  var options = {
-    title: title,
-    author: 'shgtkshruch',
-    file: fp,
-    url: url,
-    tag: [tag],
-    width: width + 'px',
-    notebookName: '1511 Responsive'
-  };
-  evernote.createNote(options, function (note) {
-    console.log('Create', title, 'note.');
-    done();
-  });
-}
+/**
+ * Get image files from `dir` directory
+ *
+ * @param {Object} it must have `title`, `url`, `guid`
+ * @param {Function} callback
+ */
 
-function file (url, title) {
+function file (note, done) {
   fs.readdir(dir, function (err, _files) {
     var reFile = /(\d+)x\d+(?:\-cropped)?\.png$/;
     var files = _files.sort(function (a, b) {
@@ -70,15 +87,15 @@ function file (url, title) {
       var sizeB = b.match(reFile)[1];
       return sizeA - sizeB;
     });
-    async.eachSeries(files, function (file, done) {
-      var width = file.match(reFile)[1];
-      var fp = dir + '/' + file;
-      var tag = _.findKey(sizes, function (size) {
-        var re = new RegExp(width);
+    async.eachSeries(files, function (file, _done) {
+      note.width = file.match(reFile)[1];
+      note.fp = dir + '/' + file;
+      note.tag = _.findKey(sizes, function (size) {
+        var re = new RegExp(note.width);
         return size.match(re);
       });
 
-      createNote(title, fp, url, tag, width, done);
+      createNote(note, _done);
     }, function (err) {
       if (err) {
         throw err;
@@ -87,15 +104,49 @@ function file (url, title) {
         if (err) {
           throw err;
         }
-        console.log('Delete', dir);
+        evernote.deleteNote({title: note.title, guid: note.guid}, function (note) {
+          console.log('Delete note:', note.title);
+          done();
+        });
       });
     });
   });
 }
 
-getUrl(function (url, title) {
-  getPage(url, function () {
-    file(url, title);
+/**
+ * Create new note to Evernote
+ *
+ * @param {Object} it must have `title`, `url`, `guid`
+ * @param {Function} callback
+ */
+
+function createNote (note, _done) {
+  var title = note.title + ' (' + note.tag + ')';
+  var options = {
+    title: title,
+    author: 'shgtkshruch',
+    file: note.fp,
+    url: note.url,
+    tag: [note.tag],
+    width: note.width + 'px',
+    notebookName: notebookName
+  };
+  evernote.createNote(options, function (note) {
+    console.log('Create', title, 'note.');
+    _done();
+  });
+}
+
+
+getNotes(keyword, 50, function (notes) {
+  async.eachSeries(notes, function (note, done) {
+    console.log('Start:', note.title);
+    getScreenshot(note, sizes, done);
+  }, function (err) {
+    if (err) {
+      throw err;
+    }
+    console.log('All task done.');
   });
 });
 
