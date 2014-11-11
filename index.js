@@ -39,7 +39,9 @@ function getNotes (keyword, maxNotes, cb) {
       evernote.getNote({guid: note.guid, withContent: true}, function (_note) {
         var $ = cheerio.load(_note.content);
         note.url = $('a').first().text();
-        note.title = _note.title;
+        note.title = _note.title.replace(/\[feedly\]/, '');
+        var tag = _note.content.match(/tag\s((\w+\s?){1,})</);
+        note.tag = tag ? tag[1].split(' ') : [];
         getTitle(note, function (title) {
           note.title = title;
           notes.push(note);
@@ -119,14 +121,14 @@ function file (note, done) {
       return sizeA - sizeB;
     });
     async.eachSeries(files, function (file, _done) {
-      note.width = file.match(reFile)[1];
-      note.fp = dir + '/' + file;
-      note.tag = _.findKey(sizes, function (size) {
-        var re = new RegExp(note.width);
+      var newNote = _.clone(note, true);
+      newNote.width = file.match(reFile)[1];
+      newNote.fp = dir + '/' + file;
+      newNote.tag.push(_.findKey(sizes, function (size) {
+        var re = new RegExp(newNote.width);
         return size.match(re);
-      });
-
-      createNote(note, _done);
+      }));
+      createNote(newNote, _done);
     }, function (err) {
       if (err) {
         throw err;
@@ -135,7 +137,7 @@ function file (note, done) {
         if (err) {
           throw err;
         }
-        evernote.deleteNote({title: note.title, guid: note.guid}, function (note) {
+        evernote.deleteNote({guid: note.guid}, function (note) {
           console.log('Delete note:', note.title);
           done();
         });
@@ -152,13 +154,13 @@ function file (note, done) {
  */
 
 function createNote (note, _done) {
-  var title = note.title + ' (' + note.tag + ')';
+  var title = note.title + ' (' + _.last(note.tag) + ')';
   var options = {
     title: title,
     author: 'shgtkshruch',
     file: note.fp,
     url: note.url,
-    tag: [note.tag],
+    tag: note.tag,
     width: note.width + 'px',
     notebookName: notebookName
   };
@@ -170,6 +172,7 @@ function createNote (note, _done) {
 
 
 getNotes(keyword, 50, function (notes) {
+  console.log("Notes number:", notes.length);
   async.eachSeries(notes, function (note, done) {
     console.log('Start:', note.title);
     getScreenshot(note, sizes, done);
