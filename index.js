@@ -1,6 +1,7 @@
 process.env.NODE_ENV = 'production';
 
 var fs = require('fs');
+var http = require('http');
 var nodeNote = require('node-note');
 var Pageres = require('pageres');
 var _ = require('lodash');
@@ -37,10 +38,13 @@ function getNotes (keyword, maxNotes, cb) {
       note.guid = metadata.guid;
       evernote.getNote({guid: note.guid, withContent: true}, function (_note) {
         var $ = cheerio.load(_note.content);
-        note.url = $('a').attr('shape', 'rect').first().text();
-        note.title = $('b').first().text();
-        notes.push(note);
-        done();
+        note.url = $('a').first().text();
+        note.title = _note.title;
+        getTitle(note, function (title) {
+          note.title = title;
+          notes.push(note);
+          done();
+        });
       });
     }, function (err) {
       if (err) {
@@ -49,6 +53,33 @@ function getNotes (keyword, maxNotes, cb) {
       cb(notes);
     });
   });
+}
+
+/**
+ * Get note title from web page if there is not note title
+ *
+ * @param {Object} it must have `title`, `url`
+ * @param {Function} callback
+ */
+
+function getTitle (note, cb) {
+  if (note.title !== '無題ノート') {
+    cb(note.title);
+  } else {
+
+    http.get(note.url, function (res) {
+      var data;
+
+      res.on('data', function (chunk) {
+        data += chunk;
+      });
+
+      res.on('end', function () {
+        var $ = cheerio.load(data);
+        cb($('title').text());
+      });
+    });
+  }
 }
 
 /**
