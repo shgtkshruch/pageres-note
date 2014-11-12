@@ -46,17 +46,16 @@ evernote.getNoteMetadata({word: keyword, maxNotes: num}, function (datas) {
  */
 
 function create (note, nextNote) {
-  getTitle(note, function (title) {
+  var n = {};
+  var $ = cheerio.load(note.content);
+  n.guid = note.guid;
+  n.title = note.title.replace(/\[feedly\]/, '').trim();
+  n.url = $('a').first().text();
+  getTitle(n, function (title) {
     console.log('Start:', title);
-    var n = {};
-    var $ = cheerio.load(note.content);
     var tag = note.content.match(/tag\s((\w+\s?){1,})</);
-
-    n.title = title;
-    n.url = $('a').first().text();
-    n.guid = note.guid;
-    n.title = note.title.replace(/\[feedly\]/, '').trim();
     n.tag = tag ? tag[1].split(' ') : [];
+    n.title = title;
     get(n, nextNote);
   });
 }
@@ -159,7 +158,7 @@ function remove (note, nextNote) {
   rimraf(dir, function (err) {
     if (err) throw err;
     evernote.deleteNote({guid: note.guid}, function (note) {
-      console.log('Delete note:', note.title);
+      console.log('Delete:', note.title);
       nextNote();
     });
   });
