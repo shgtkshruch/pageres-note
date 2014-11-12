@@ -5,22 +5,23 @@ var http = require('http');
 var nodeNote = require('node-note');
 var Pageres = require('pageres');
 var _ = require('lodash');
-var async = require('async');
+var each = require('async').eachSeries;
 var cheerio = require('cheerio');
 var rimraf = require('rimraf');
 var config = require('./config.json');
 
 var evernote = new nodeNote(config);
+var dir = __dirname + '/images';
 
+// configuration
 var sizes = {
   'mobile': '320x480',
   'tablet': '768x1024',
   'laptop': '1366x768',
   'desktop': '1920x1080'
 };
-var dir = __dirname + '/images';
+
 var keyword = 'web_design_evernote';
-var notebookName = '1511 Responsive';
 
 /**
  * Get note ooject from Evernote
@@ -30,12 +31,12 @@ var notebookName = '1511 Responsive';
  * @param {Function} callback
  */
 
-function getNotes (keyword, maxNotes, cb) {
+function fetch (keyword, maxNotes, cb) {
   var notes = [];
-  evernote.getNoteMetadata({word: keyword, maxNotes: maxNotes}, function (noteMetadataList) {
-    async.each(noteMetadataList, function (metadata, done) {
-      evernote.getNote({guid: metadata.guid, withContent: true}, function (note) {
-        createNotes(notes, note, done);
+  evernote.getNoteMetadata({word: keyword, maxNotes: maxNotes}, function (datas) {
+    each(datas, function (data, done) {
+      evernote.getNote({guid: data.guid, withContent: true}, function (note) {
+        create(notes, note, done);
       });
     }, function (err) {
       if (err) throw err;
@@ -44,17 +45,18 @@ function getNotes (keyword, maxNotes, cb) {
   });
 }
 
-function createNotes (notes, note, next) {
-  var resNote = {};
+function create (notes, note, next) {
+  var n = {};
   var $ = cheerio.load(note.content);
-  resNote.guid = note.guid;
-  resNote.url = $('a').first().text();
-  resNote.title = note.title.replace(/\[feedly\]/, '').trim();
   var tag = note.content.match(/tag\s((\w+\s?){1,})</);
-  resNote.tag = tag ? tag[1].split(' ') : [];
-  getTitle(resNote, function (title) {
-    resNote.title = title;
-    notes.push(resNote);
+
+  n.url = $('a').first().text();
+  n.guid = note.guid;
+  n.title = note.title.replace(/\[feedly\]/, '').trim();
+  n.tag = tag ? tag[1].split(' ') : [];
+  getTitle(n, function (title) {
+    n.title = title;
+    notes.push(n);
     next();
   });
 }
@@ -94,15 +96,19 @@ function getTitle (note, cb) {
  * @param {Function} callback
  */
 
-function getScreenshot (note, sizes, next) {
-  var pageres = new Pageres({delay: 2})
+function get (note, sizes, next) {
+  new Pageres({delay: 2})
     .src(note.url, _.values(sizes))
-    .dest(dir);
+    .dest(dir)
+    .run(function (err) {
+      if (err) throw err;
 
-  pageres.run(function (err) {
-    if (err) throw err;
-    file(note, next);
-  });
+      var width = /(\d+)x\d+(?:\-cropped)?\.png$/;
+      var files = fs.readdirSync(dir).sort(function (a, b) {
+        return a.match(width)[1] - b.match(width)[1];
+      });
+      file(files, note, next);
+    });
 }
 
 /**
@@ -112,38 +118,17 @@ function getScreenshot (note, sizes, next) {
  * @param {Function} callback
  */
 
-function file (note, next) {
-  fs.readdir(dir, function (err, _files) {
-    var reFile = /(\d+)x\d+(?:\-cropped)?\.png$/;
-    var files = _files.sort(function (a, b) {
-      var sizeA= a.match(reFile)[1];
-      var sizeB = b.match(reFile)[1];
-      return sizeA - sizeB;
-    });
-    createNoteFrom(note, files, next);
-  });
-}
-
-/**
- * Pass file to createNote method
- *
- * @param {Array} files array
- */
-
-function createNoteFrom (note, files, next) {
+function file (files, note, next) {
   var i = 0;
-  async.eachSeries(files, function (file, nextFile) {
-    var newNote = _.clone(note, true);
-    newNote.width = _.values(sizes)[i++].replace(/x\d+/, '');
-    newNote.fp = dir + '/' + file;
-    newNote.tag.push(_.findKey(sizes, function (size) {
-      var re = new RegExp(newNote.width);
-      return size.match(re);
-    }));
-    createNote(newNote, nextFile);
+  each(files, function (file, nextFile) {
+    var n = _.clone(note, true);
+    n.width = _.values(sizes)[i].replace(/x\d+/, '');
+    n.fp = dir + '/' + file;
+    n.tag.push(_.keys(sizes)[i++]);
+    save(n, nextFile);
   }, function (err) {
-      if (err) throw err;
-      deleteResource(note, next);
+    if (err) throw err;
+    remove(note, next);
   });
 }
 
@@ -154,20 +139,19 @@ function createNoteFrom (note, files, next) {
  * @param {Function} callback
  */
 
-function createNote (note, nextFile) {
-  var title = note.title + ' (' + _.last(note.tag) + ')';
+function save (note, done) {
   var options = {
-    title: title,
-    author: 'shgtkshruch',
+    title: note.title + ' (' + _.last(note.tag) + ')',
     file: note.fp,
     url: note.url,
     tag: note.tag,
     width: note.width + 'px',
-    notebookName: notebookName
+    notebookName: '1511 Responsive',
+    author: 'shgtkshruch'
   };
   evernote.createNote(options, function (note) {
-    console.log('Create', title, 'note.');
-    nextFile();
+    console.log('Create', options.title, 'note.');
+    done();
   });
 }
 
@@ -178,7 +162,7 @@ function createNote (note, nextFile) {
  * @param {callback} async callback
  */
 
-function deleteResource (note, done) {
+function remove (note, done) {
   rimraf(dir, function (err) {
     if (err) throw err;
     evernote.deleteNote({guid: note.guid}, function (note) {
@@ -188,15 +172,13 @@ function deleteResource (note, done) {
   });
 }
 
-
-getNotes(keyword, 50, function (notes) {
+fetch(keyword, 50, function (notes) {
   console.log("Notes number:", notes.length);
-  async.eachSeries(notes, function (note, next) {
+  each(notes, function (note, next) {
     console.log('Start:', note.title);
-    getScreenshot(note, sizes, next);
+    get(note, sizes, next);
   }, function (err) {
     if (err) throw err;
     console.log('All task done.');
   });
 });
-
