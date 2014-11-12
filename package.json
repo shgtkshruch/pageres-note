@@ -22,6 +22,7 @@
     "lodash": "^2.4.1",
     "node-note": "^0.1.4",
     "pageres": "^1.0.1",
+    "request": "^2.47.0",
     "rimraf": "^2.2.8"
   }
 }

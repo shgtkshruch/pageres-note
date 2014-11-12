@@ -1,12 +1,12 @@
 process.env.NODE_ENV = 'production';
 
 var fs = require('fs');
-var http = require('http');
 var nodeNote = require('node-note');
 var Pageres = require('pageres');
 var _ = require('lodash');
 var each = require('async').eachSeries;
 var cheerio = require('cheerio');
+var request = require('request');
 var rimraf = require('rimraf');
 var config = require('./config.json');
 
@@ -69,21 +69,14 @@ function create (notes, note, next) {
  */
 
 function getTitle (note, cb) {
-  if (note.title !== '無題ノート') {
+  if (note.title !== 'Mailed in note') {
     cb(note.title);
   } else {
-
-    http.get(note.url, function (res) {
-      var data;
-
-      res.on('data', function (chunk) {
-        data += chunk;
-      });
-
-      res.on('end', function () {
-        var $ = cheerio.load(data);
+    request(note.url, function (error, response, body) {
+      if (!error && response.statusCode == 200) {
+        var $ = cheerio.load(body);
         cb($('title').text());
-      });
+      }
     });
   }
 }
