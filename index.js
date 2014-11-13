@@ -53,8 +53,8 @@ function create (note, nextNote) {
   n.url = $('a').first().text();
   getTitle(n, function (title) {
     console.log('Start:', title);
-    var tag = note.content.match(/tag\s((\w+\s?){1,})</);
-    n.tag = tag ? tag[1].split(' ') : [];
+    var tag = note.content.match(/tag\s((\w+\s?){1,})</)[1].trim();
+    n.tag = tag ? tag.split(' ') : [];
     n.title = title;
     get(n, nextNote);
   });
