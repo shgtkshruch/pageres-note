@@ -50,11 +50,12 @@ function create (note, nextNote) {
   var $ = cheerio.load(note.content);
   n.guid = note.guid;
   n.title = note.title.replace(/\[feedly\]/, '').trim();
-  n.url = $('a').first().text();
+  var a = $('a').first().text();
+  n.url = a ? a : note.content.match(/(?:<br\s.+\/>)(https?:\/\/.+)/)[1].split('<br')[0];
   getTitle(n, function (title) {
     console.log('Start:', title);
-    var tag = note.content.match(/tag\s((\w+\s?){1,})</)[1].trim();
-    n.tag = tag ? tag.split(' ') : [];
+    var tag = note.content.match(/tag\s((\w+\s?){1,})</);
+    n.tag = tag ? tag[1].trim().split(' ') : [];
     n.title = title;
     get(n, nextNote);
   });
