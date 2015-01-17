@@ -51,7 +51,7 @@ function create (note, nextNote) {
   n.guid = note.guid;
   n.title = note.title.replace(/\[feedly\]/, '').trim();
   var a = $('a').first().text();
-  n.url = a ? a : note.content.match(/(?:<br\s.+\/>)(https?:\/\/.+)/)[1].split('<br')[0];
+  n.url = a ? a : note.content.match(/(?:<br\s.+\/>)?(https?:\/\/.+)/)[1].split('<br')[0];
   getTitle(n, function (title) {
     console.log('Start:', title);
     var tag = note.content.match(/tag\s((\w+\s?){1,})</);
